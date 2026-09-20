@@ -84,6 +84,13 @@ class WrikeClient:
         status_id = self.resolve_status_id(status_name)
         return self.get_tasks_by_custom_status(status_id)
 
+    def get_task(self, task_id: str) -> WrikeTask:
+        data = self._get(f"/tasks/{task_id}", params={"fields": '["description"]'})
+        results = data.get("data", [])
+        if not results:
+            raise WrikeAPIError(f"No task found with id {task_id!r}.")
+        return self._parse_task(results[0])
+
     @staticmethod
     def _parse_task(raw: dict) -> WrikeTask:
         return WrikeTask(

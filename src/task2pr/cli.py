@@ -8,7 +8,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
+import anthropic
+
+from task2pr.agent import run_explore_loop
+from task2pr.agent.loop import AgentLoopError
 from task2pr.config import MissingConfigError, Settings
 from task2pr.logging_setup import configure_logging
 from task2pr.wrike import WrikeAPIError, WrikeClient
@@ -35,6 +40,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--status",
         default="AI Ready",
         help='Custom status name to filter on (default: "AI Ready").',
+    )
+
+    explore = subparsers.add_parser(
+        "explore",
+        help="Explore a target repo and propose a plan for a task (read-only, no edits).",
+    )
+    explore.add_argument("--repo", required=True, help="Path to the target repo on disk.")
+    task_source = explore.add_mutually_exclusive_group(required=True)
+    task_source.add_argument("--task-text", help="Inline task description.")
+    task_source.add_argument(
+        "--wrike-task-id", help="Fetch the task description from this Wrike task id."
     )
 
     return parser
@@ -79,6 +95,43 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{task.id}] {task.title}")
             print(f"  {task.permalink}")
             print()
+        return 0
+
+    if args.command == "explore":
+        settings = Settings.load()
+        try:
+            settings.require("anthropic_api_key")
+            if args.wrike_task_id:
+                settings.require("wrike_api_token")
+        except MissingConfigError as exc:
+            print(f"Config invalid: {exc}", file=sys.stderr)
+            return 1
+        configure_logging(settings.log_level)
+
+        repo_root = Path(args.repo).resolve()
+        if not repo_root.is_dir():
+            print(f"Error: {repo_root} is not a directory.", file=sys.stderr)
+            return 1
+
+        if args.wrike_task_id:
+            wrike_client = WrikeClient(settings.wrike_api_token)
+            try:
+                task = wrike_client.get_task(args.wrike_task_id)
+            except WrikeAPIError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1
+            task_description = f"{task.title}\n\n{task.description}"
+        else:
+            task_description = args.task_text
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        try:
+            plan = run_explore_loop(client, task_description, repo_root)
+        except AgentLoopError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+        print(plan)
         return 0
 
     parser.error(f"Unknown command: {args.command}")
