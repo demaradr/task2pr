@@ -5,11 +5,13 @@ description = "Agentic automation: Wrike task -> code change -> GitHub PR"
 requires-python = ">=3.11"
 dependencies = [
     "python-dotenv>=1.0",
+    "requests>=2.31",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "requests-mock>=1.12",
 ]
 
 [project.scripts]
