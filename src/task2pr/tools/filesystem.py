@@ -114,3 +114,51 @@ def grep(sandbox: RepoSandbox, pattern: str, path: str = ".") -> str:
                     return "\n".join(matches)
 
     return "\n".join(matches) if matches else "(no matches)"
+
+
+def write_file(sandbox: RepoSandbox, path: str, content: str) -> str:
+    """Create a file or overwrite it entirely. Prefer edit_file for changes
+    to existing files so unrelated content isn't discarded."""
+    target = sandbox.resolve(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    existed = target.exists()
+    target.write_text(content, encoding="utf-8")
+    verb = "Overwrote" if existed else "Created"
+    return f"{verb} {path} ({len(content.splitlines())} lines)."
+
+
+def edit_file(
+    sandbox: RepoSandbox,
+    path: str,
+    old_string: str,
+    new_string: str,
+    replace_all: bool = False,
+) -> str:
+    """Replace an exact substring in an existing file. Mirrors the standard
+    editor-tool contract: old_string must match exactly (read the file
+    first), and must be unique unless replace_all is set."""
+    target = sandbox.resolve(path)
+    if not target.exists():
+        raise ToolError(f"{path!r} does not exist. Use write_file to create it.")
+    if not target.is_file():
+        raise ToolError(f"{path!r} is not a file.")
+
+    content = target.read_text(encoding="utf-8")
+    count = content.count(old_string)
+    if count == 0:
+        raise ToolError(
+            f"old_string not found in {path!r}. Read the file first and copy the exact text."
+        )
+    if count > 1 and not replace_all:
+        raise ToolError(
+            f"old_string matches {count} places in {path!r}; it must be unique. "
+            "Include more surrounding context, or set replace_all=true."
+        )
+
+    if replace_all:
+        new_content = content.replace(old_string, new_string)
+    else:
+        new_content = content.replace(old_string, new_string, 1)
+    target.write_text(new_content, encoding="utf-8")
+    occurrences = count if replace_all else 1
+    return f"Replaced {occurrences} occurrence(s) in {path}."

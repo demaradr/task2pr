@@ -18,7 +18,7 @@ from pathlib import Path
 
 import anthropic
 
-from task2pr.tools import TOOL_SCHEMAS, run_tool
+from task2pr.tools import READ_ONLY_TOOL_SCHEMAS, run_tool
 from task2pr.tools.filesystem import RepoSandbox
 
 logger = logging.getLogger(__name__)
@@ -73,13 +73,13 @@ def run_explore_loop(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
-            tools=TOOL_SCHEMAS,
+            tools=READ_ONLY_TOOL_SCHEMAS,
             messages=messages,
         )
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason != "tool_use":
-            return _extract_text(response)
+            return extract_text(response)
 
         tool_results = []
         for block in response.content:
@@ -97,5 +97,5 @@ def run_explore_loop(
     )
 
 
-def _extract_text(response: anthropic.types.Message) -> str:
+def extract_text(response: anthropic.types.Message) -> str:
     return "\n".join(block.text for block in response.content if block.type == "text")

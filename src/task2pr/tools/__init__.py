@@ -1,6 +1,14 @@
-from task2pr.tools.filesystem import RepoSandbox, ToolError, grep, list_directory, read_file
+from task2pr.tools.filesystem import (
+    RepoSandbox,
+    ToolError,
+    edit_file,
+    grep,
+    list_directory,
+    read_file,
+    write_file,
+)
 
-TOOL_SCHEMAS = [
+READ_ONLY_TOOL_SCHEMAS = [
     {
         "name": "list_directory",
         "description": (
@@ -63,6 +71,47 @@ TOOL_SCHEMAS = [
     },
 ]
 
+EDIT_TOOL_SCHEMAS = READ_ONLY_TOOL_SCHEMAS + [
+    {
+        "name": "write_file",
+        "description": (
+            "Create a new file, or overwrite an existing one entirely, "
+            "inside the target repo. Prefer edit_file for changes to an "
+            "existing file so you don't discard unrelated content."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path relative to the repo root."},
+                "content": {"type": "string", "description": "Full file content to write."},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": (
+            "Replace an exact snippet of text in an existing file inside the "
+            "target repo. old_string must match the file's current content "
+            "exactly (read the file first) and must be unique unless "
+            "replace_all is set."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path relative to the repo root."},
+                "old_string": {"type": "string", "description": "Exact text to replace."},
+                "new_string": {"type": "string", "description": "Text to replace it with."},
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "Replace every occurrence instead of requiring a unique match. Default false.",
+                },
+            },
+            "required": ["path", "old_string", "new_string"],
+        },
+    },
+]
+
 
 def run_tool(sandbox: RepoSandbox, name: str, tool_input: dict) -> str:
     """Dispatch a tool call and return its result as a string.
@@ -83,9 +132,25 @@ def run_tool(sandbox: RepoSandbox, name: str, tool_input: dict) -> str:
             )
         if name == "grep":
             return grep(sandbox, tool_input["pattern"], tool_input.get("path", "."))
+        if name == "write_file":
+            return write_file(sandbox, tool_input["path"], tool_input["content"])
+        if name == "edit_file":
+            return edit_file(
+                sandbox,
+                tool_input["path"],
+                tool_input["old_string"],
+                tool_input["new_string"],
+                replace_all=tool_input.get("replace_all", False),
+            )
         return f"Error: unknown tool {name!r}"
     except ToolError as exc:
         return f"Error: {exc}"
 
 
-__all__ = ["RepoSandbox", "ToolError", "TOOL_SCHEMAS", "run_tool"]
+__all__ = [
+    "RepoSandbox",
+    "ToolError",
+    "READ_ONLY_TOOL_SCHEMAS",
+    "EDIT_TOOL_SCHEMAS",
+    "run_tool",
+]
