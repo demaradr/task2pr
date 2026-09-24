@@ -8,12 +8,14 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import anthropic
 
 from task2pr.agent import AgentLoopError, run_edit_loop, run_explore_loop
 from task2pr.config import MissingConfigError, Settings
+from task2pr.github import ShipError, ship_branch
 from task2pr.logging_setup import configure_logging
 from task2pr.wrike import WrikeAPIError, WrikeClient
 
@@ -73,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="Give up after this many failed test runs (default: 3).",
     )
+    run_task.add_argument(
+        "--open-pr",
+        action="store_true",
+        help=(
+            "If the change passes tests, push a branch and open a GitHub PR. "
+            "Never runs if tests fail."
+        ),
+    )
 
     return parser
 
@@ -85,9 +95,16 @@ def _resolve_repo_root(repo_arg: str) -> Path | None:
     return repo_root
 
 
-def _resolve_task_description(
+@dataclass(frozen=True)
+class ResolvedTask:
+    title: str
+    description: str
+    wrike_permalink: str | None = None
+
+
+def _resolve_task(
     settings: Settings, task_text: str | None, wrike_task_id: str | None
-) -> str | None:
+) -> ResolvedTask | None:
     if wrike_task_id:
         wrike_client = WrikeClient(settings.wrike_api_token)
         try:
@@ -95,8 +112,13 @@ def _resolve_task_description(
         except WrikeAPIError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return None
-        return f"{task.title}\n\n{task.description}"
-    return task_text
+        return ResolvedTask(
+            title=task.title,
+            description=f"{task.title}\n\n{task.description}",
+            wrike_permalink=task.permalink,
+        )
+    title = task_text.splitlines()[0][:72] if task_text else "task2pr change"
+    return ResolvedTask(title=title, description=task_text)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -155,15 +177,13 @@ def main(argv: list[str] | None = None) -> int:
         if repo_root is None:
             return 1
 
-        task_description = _resolve_task_description(
-            settings, args.task_text, args.wrike_task_id
-        )
-        if task_description is None:
+        task = _resolve_task(settings, args.task_text, args.wrike_task_id)
+        if task is None:
             return 1
 
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         try:
-            plan = run_explore_loop(client, task_description, repo_root)
+            plan = run_explore_loop(client, task.description, repo_root)
         except AgentLoopError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
@@ -177,6 +197,8 @@ def main(argv: list[str] | None = None) -> int:
             settings.require("anthropic_api_key")
             if args.wrike_task_id:
                 settings.require("wrike_api_token")
+            if args.open_pr:
+                settings.require("github_token")
         except MissingConfigError as exc:
             print(f"Config invalid: {exc}", file=sys.stderr)
             return 1
@@ -186,17 +208,15 @@ def main(argv: list[str] | None = None) -> int:
         if repo_root is None:
             return 1
 
-        task_description = _resolve_task_description(
-            settings, args.task_text, args.wrike_task_id
-        )
-        if task_description is None:
+        task = _resolve_task(settings, args.task_text, args.wrike_task_id)
+        if task is None:
             return 1
 
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         try:
             result = run_edit_loop(
                 client,
-                task_description,
+                task.description,
                 repo_root,
                 args.test_cmd,
                 max_test_attempts=args.max_test_attempts,
@@ -212,7 +232,23 @@ def main(argv: list[str] | None = None) -> int:
         if not result.success:
             print()
             print(result.test_output)
-        return 0 if result.success else 1
+            return 1
+
+        if not args.open_pr:
+            return 0
+
+        pr_body = result.summary
+        if task.wrike_permalink:
+            pr_body += f"\n\n---\nWrike task: {task.wrike_permalink}"
+
+        try:
+            pr = ship_branch(repo_root, settings.github_token, task.title, pr_body)
+        except ShipError as exc:
+            print(f"Error opening PR: {exc}", file=sys.stderr)
+            return 1
+
+        print(f"Opened PR #{pr.number}: {pr.html_url}")
+        return 0
 
     parser.error(f"Unknown command: {args.command}")
     return 2
