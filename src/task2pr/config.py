@@ -21,6 +21,7 @@ _ENV_VAR_NAMES = {
     "wrike_api_token": "WRIKE_API_TOKEN",
     "github_token": "GITHUB_TOKEN",
     "anthropic_api_key": "ANTHROPIC_API_KEY",
+    "github_webhook_secret": "GITHUB_WEBHOOK_SECRET",
 }
 
 
@@ -29,6 +30,7 @@ class Settings:
     wrike_api_token: str | None
     github_token: str | None
     anthropic_api_key: str | None
+    github_webhook_secret: str | None = None
     log_level: str = "INFO"
     state_path: Path = DEFAULT_STATE_PATH
 
@@ -39,6 +41,7 @@ class Settings:
             wrike_api_token=os.environ.get("WRIKE_API_TOKEN") or None,
             github_token=os.environ.get("GITHUB_TOKEN") or None,
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
+            github_webhook_secret=os.environ.get("GITHUB_WEBHOOK_SECRET") or None,
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
             state_path=Path(os.environ.get("TASK2PR_STATE_PATH", DEFAULT_STATE_PATH)),
         )

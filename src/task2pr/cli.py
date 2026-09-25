@@ -85,6 +85,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    serve_webhook = subparsers.add_parser(
+        "serve-webhook",
+        help="Run the GitHub webhook receiver that marks Wrike tasks done when their PR merges.",
+    )
+    serve_webhook.add_argument(
+        "--host", default="127.0.0.1", help="Interface to bind (default: 127.0.0.1)."
+    )
+    serve_webhook.add_argument(
+        "--port", type=int, default=8000, help="Port to listen on (default: 8000)."
+    )
+
     return parser
 
 
@@ -260,6 +271,25 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         print(f"Opened PR #{ship_result.pr_number}: {ship_result.pr_url}")
+        return 0
+
+    if args.command == "serve-webhook":
+        settings = Settings.load()
+        try:
+            settings.require("wrike_api_token", "github_webhook_secret")
+        except MissingConfigError as exc:
+            print(f"Config invalid: {exc}", file=sys.stderr)
+            return 1
+        configure_logging(settings.log_level)
+
+        # Imported lazily so every other command stays fast to start - only
+        # this one needs the web server stack.
+        import uvicorn
+
+        from task2pr.webhook import create_app
+
+        app = create_app(settings)
+        uvicorn.run(app, host=args.host, port=args.port)
         return 0
 
     parser.error(f"Unknown command: {args.command}")
