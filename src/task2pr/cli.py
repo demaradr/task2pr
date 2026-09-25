@@ -15,6 +15,7 @@ import anthropic
 
 from task2pr.agent import AgentLoopError, run_edit_loop, run_explore_loop
 from task2pr.config import MissingConfigError, Settings
+from task2pr.eval import DEFAULT_FIXTURES_DIR, DEFAULT_TASKS_DIR, run_eval
 from task2pr.github import ShipError, ship_branch
 from task2pr.logging_setup import configure_logging
 from task2pr.store import TaskMapping, TaskMappingStore
@@ -94,6 +95,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve_webhook.add_argument(
         "--port", type=int, default=8000, help="Port to listen on (default: 8000)."
+    )
+
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Run the seeded eval task set through the edit-and-test loop and report a score.",
+    )
+    eval_parser.add_argument(
+        "--tasks-dir",
+        default=None,
+        help=f"Directory of eval task JSON files (default: {DEFAULT_TASKS_DIR}).",
+    )
+    eval_parser.add_argument(
+        "--fixtures-dir",
+        default=None,
+        help=f"Directory of fixture repos (default: {DEFAULT_FIXTURES_DIR}).",
     )
 
     return parser
@@ -291,6 +307,33 @@ def main(argv: list[str] | None = None) -> int:
         app = create_app(settings)
         uvicorn.run(app, host=args.host, port=args.port)
         return 0
+
+    if args.command == "eval":
+        settings = Settings.load()
+        try:
+            settings.require("anthropic_api_key")
+        except MissingConfigError as exc:
+            print(f"Config invalid: {exc}", file=sys.stderr)
+            return 1
+        configure_logging(settings.log_level)
+
+        tasks_dir = Path(args.tasks_dir) if args.tasks_dir else DEFAULT_TASKS_DIR
+        fixtures_dir = Path(args.fixtures_dir) if args.fixtures_dir else DEFAULT_FIXTURES_DIR
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        outcomes = run_eval(client, tasks_dir, fixtures_dir)
+
+        for outcome in outcomes:
+            status = "PASS" if outcome.success else "FAIL"
+            print(f"[{status}] {outcome.task_id} ({outcome.test_attempts} attempt(s))")
+            if not outcome.success:
+                last_line = outcome.detail.strip().splitlines()[-1] if outcome.detail.strip() else ""
+                print(f"       {last_line}")
+
+        passed = sum(1 for outcome in outcomes if outcome.success)
+        print()
+        print(f"Score: {passed}/{len(outcomes)} tasks passed.")
+        return 0 if passed == len(outcomes) else 1
 
     parser.error(f"Unknown command: {args.command}")
     return 2

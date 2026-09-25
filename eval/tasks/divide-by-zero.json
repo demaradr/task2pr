@@ -1,0 +1,6 @@
+{
+  "id": "divide-by-zero",
+  "fixture": "divide-by-zero",
+  "description": "Update divide(a, b) in calculator.py to raise a ValueError with message 'Cannot divide by zero' when b is 0, instead of letting a ZeroDivisionError propagate. Existing behavior for non-zero b must be unchanged.",
+  "test_cmd": "python3 -m pytest -q"
+}

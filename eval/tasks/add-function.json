@@ -1,0 +1,6 @@
+{
+  "id": "add-function",
+  "fixture": "add-function",
+  "description": "Add a function `add(a, b)` to calculator.py that returns the sum of a and b. Add a test for it in tests/test_calculator.py that checks add(2, 3) == 5.",
+  "test_cmd": "python3 -m pytest -q"
+}

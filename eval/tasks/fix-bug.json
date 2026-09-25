@@ -1,0 +1,6 @@
+{
+  "id": "fix-bug",
+  "fixture": "fix-bug",
+  "description": "The multiply(a, b) function in calculator.py has a bug - it doesn't actually multiply. Fix it so multiply(3, 4) returns 12.",
+  "test_cmd": "python3 -m pytest -q"
+}
