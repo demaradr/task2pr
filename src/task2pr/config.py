@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+DEFAULT_STATE_PATH = Path.home() / ".task2pr" / "state.json"
 
 _ENV_VAR_NAMES = {
     "wrike_api_token": "WRIKE_API_TOKEN",
@@ -27,6 +30,7 @@ class Settings:
     github_token: str | None
     anthropic_api_key: str | None
     log_level: str = "INFO"
+    state_path: Path = DEFAULT_STATE_PATH
 
     @classmethod
     def load(cls) -> "Settings":
@@ -36,6 +40,7 @@ class Settings:
             github_token=os.environ.get("GITHUB_TOKEN") or None,
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
+            state_path=Path(os.environ.get("TASK2PR_STATE_PATH", DEFAULT_STATE_PATH)),
         )
 
     def require(self, *field_names: str) -> None:

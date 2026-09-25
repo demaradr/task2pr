@@ -69,3 +69,20 @@ def test_get_raises_on_http_error(requests_mock):
 
     with pytest.raises(WrikeAPIError, match="401"):
         client.list_custom_statuses()
+
+
+def test_mark_task_complete_sends_completed_status(requests_mock):
+    requests_mock.put(f"{BASE}/tasks/task-1", json={"data": [{"id": "task-1"}]})
+    client = WrikeClient(api_token="fake-token")
+
+    client.mark_task_complete("task-1")
+
+    assert requests_mock.last_request.qs["status"] == ["completed"]
+
+
+def test_mark_task_complete_raises_on_error(requests_mock):
+    requests_mock.put(f"{BASE}/tasks/task-1", status_code=403, text="Forbidden")
+    client = WrikeClient(api_token="fake-token")
+
+    with pytest.raises(WrikeAPIError, match="403"):
+        client.mark_task_complete("task-1")

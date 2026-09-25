@@ -43,11 +43,17 @@ class WrikeClient:
         self._session.headers.update({"Authorization": f"Bearer {api_token}"})
 
     def _get(self, path: str, params: dict[str, str] | None = None) -> dict:
+        return self._request("GET", path, params=params)
+
+    def _put(self, path: str, params: dict[str, str] | None = None) -> dict:
+        return self._request("PUT", path, params=params)
+
+    def _request(self, method: str, path: str, params: dict[str, str] | None = None) -> dict:
         url = f"{self._base_url}{path}"
-        response = self._session.get(url, params=params, timeout=30)
+        response = self._session.request(method, url, params=params, timeout=30)
         if not response.ok:
             raise WrikeAPIError(
-                f"Wrike API error {response.status_code} for {path}: {response.text}"
+                f"Wrike API error {response.status_code} for {method} {path}: {response.text}"
             )
         return response.json()
 
@@ -90,6 +96,12 @@ class WrikeClient:
         if not results:
             raise WrikeAPIError(f"No task found with id {task_id!r}.")
         return self._parse_task(results[0])
+
+    def mark_task_complete(self, task_id: str) -> None:
+        """Set a task's built-in status to Completed (Wrike's status field,
+        not a custom status - "done" doesn't need to distinguish between
+        workflows the way "AI Ready" does)."""
+        self._put(f"/tasks/{task_id}", params={"status": "Completed"})
 
     @staticmethod
     def _parse_task(raw: dict) -> WrikeTask:

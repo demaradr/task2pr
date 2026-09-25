@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
-from task2pr.github.client import GitHubAPIError, GitHubClient, PullRequestInfo
+from task2pr.github.client import GitHubAPIError, GitHubClient
 from task2pr.github.git_ops import (
     GitOpsError,
     commit_all,
@@ -30,6 +31,15 @@ class ShipError(RuntimeError):
     """Raised when branching, committing, pushing, or PR creation fails."""
 
 
+@dataclass(frozen=True)
+class ShipResult:
+    pr_number: int
+    pr_url: str
+    owner: str
+    repo: str
+    branch: str
+
+
 def _slugify_branch_name(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40]
     suffix = uuid.uuid4().hex[:6]
@@ -43,7 +53,7 @@ def ship_branch(
     pr_body: str,
     branch_name: str | None = None,
     base_branch: str | None = None,
-) -> PullRequestInfo:
+) -> ShipResult:
     try:
         if not has_uncommitted_changes(repo_root):
             raise ShipError("No changes to ship - the working tree is clean.")
@@ -58,8 +68,15 @@ def ship_branch(
 
         client = GitHubClient(github_token)
         base = base_branch or client.get_default_branch(owner, repo)
-        return client.create_pull_request(
+        pr = client.create_pull_request(
             owner, repo, head=branch_name, base=base, title=task_title, body=pr_body
+        )
+        return ShipResult(
+            pr_number=pr.number,
+            pr_url=pr.html_url,
+            owner=owner,
+            repo=repo,
+            branch=branch_name,
         )
     except (GitOpsError, GitHubAPIError) as exc:
         raise ShipError(str(exc)) from exc

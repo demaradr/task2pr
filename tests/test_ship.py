@@ -46,9 +46,13 @@ def test_ship_branch_creates_commit_and_opens_pr(repo, monkeypatch, requests_moc
         json={"number": 7, "html_url": "https://github.com/acme/widgets/pull/7"},
     )
 
-    pr = ship_branch(repo, "fake-token", "Fix the thing", "PR body text")
+    result = ship_branch(repo, "fake-token", "Fix the thing", "PR body text")
 
-    assert pr.number == 7
+    assert result.pr_number == 7
+    assert result.pr_url == "https://github.com/acme/widgets/pull/7"
+    assert result.owner == "acme"
+    assert result.repo == "widgets"
+    assert result.branch.startswith("task2pr/fix-the-thing")
     assert pushed["owner"] == "acme"
     assert pushed["repo"] == "widgets"
     assert pushed["branch"].startswith("task2pr/fix-the-thing")

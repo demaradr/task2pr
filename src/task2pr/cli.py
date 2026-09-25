@@ -17,6 +17,7 @@ from task2pr.agent import AgentLoopError, run_edit_loop, run_explore_loop
 from task2pr.config import MissingConfigError, Settings
 from task2pr.github import ShipError, ship_branch
 from task2pr.logging_setup import configure_logging
+from task2pr.store import TaskMapping, TaskMappingStore
 from task2pr.wrike import WrikeAPIError, WrikeClient
 
 logger = logging.getLogger(__name__)
@@ -242,12 +243,23 @@ def main(argv: list[str] | None = None) -> int:
             pr_body += f"\n\n---\nWrike task: {task.wrike_permalink}"
 
         try:
-            pr = ship_branch(repo_root, settings.github_token, task.title, pr_body)
+            ship_result = ship_branch(repo_root, settings.github_token, task.title, pr_body)
         except ShipError as exc:
             print(f"Error opening PR: {exc}", file=sys.stderr)
             return 1
 
-        print(f"Opened PR #{pr.number}: {pr.html_url}")
+        if args.wrike_task_id:
+            TaskMappingStore(settings.state_path).record(
+                TaskMapping(
+                    wrike_task_id=args.wrike_task_id,
+                    github_owner=ship_result.owner,
+                    github_repo=ship_result.repo,
+                    pr_number=ship_result.pr_number,
+                    branch=ship_result.branch,
+                )
+            )
+
+        print(f"Opened PR #{ship_result.pr_number}: {ship_result.pr_url}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")
