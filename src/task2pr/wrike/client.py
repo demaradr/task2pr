@@ -91,7 +91,10 @@ class WrikeClient:
         return self.get_tasks_by_custom_status(status_id)
 
     def get_task(self, task_id: str) -> WrikeTask:
-        data = self._get(f"/tasks/{task_id}", params={"fields": '["description"]'})
+        # Unlike the list endpoint, GET /tasks/{id} rejects an explicit
+        # fields=["description"] request (400 "not allowed") - description
+        # is already included by default on the single-task response.
+        data = self._get(f"/tasks/{task_id}")
         results = data.get("data", [])
         if not results:
             raise WrikeAPIError(f"No task found with id {task_id!r}.")

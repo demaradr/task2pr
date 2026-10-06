@@ -63,6 +63,41 @@ def test_get_tasks_by_status_name_returns_parsed_tasks(requests_mock):
     assert tasks[0].custom_status_id == "status-123"
 
 
+def test_get_task_returns_parsed_task_without_fields_param(requests_mock):
+    requests_mock.get(
+        f"{BASE}/tasks/task-1",
+        json={
+            "data": [
+                {
+                    "id": "task-1",
+                    "title": "add Brick Wall",
+                    "description": "<p>Implement the Brick Wall problem</p>",
+                    "permalink": "https://www.wrike.com/open.htm?id=task-1",
+                    "status": "Active",
+                    "customStatusId": "status-123",
+                }
+            ]
+        },
+    )
+    client = WrikeClient(api_token="fake-token")
+
+    task = client.get_task("task-1")
+
+    assert task.id == "task-1"
+    assert task.title == "add Brick Wall"
+    # GET /tasks/{id} rejects an explicit fields=["description"] param
+    # (400 "not allowed") - confirm we don't send it on this endpoint.
+    assert "fields" not in requests_mock.last_request.qs
+
+
+def test_get_task_raises_when_not_found(requests_mock):
+    requests_mock.get(f"{BASE}/tasks/task-1", json={"data": []})
+    client = WrikeClient(api_token="fake-token")
+
+    with pytest.raises(WrikeAPIError, match="No task found"):
+        client.get_task("task-1")
+
+
 def test_get_raises_on_http_error(requests_mock):
     requests_mock.get(f"{BASE}/workflows", status_code=401, text="Unauthorized")
     client = WrikeClient(api_token="bad-token")
