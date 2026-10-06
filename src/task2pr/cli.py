@@ -1,7 +1,6 @@
 """Command-line entry point for task2pr.
 
-This is intentionally thin right now (Stage 1: just config validation).
-Later stages will add subcommands like `poll`, `run-task`, and `eval`.
+Subcommands: check-config, poll-wrike, explore, run-task, serve-webhook, eval.
 """
 from __future__ import annotations
 

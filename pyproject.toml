@@ -28,3 +28,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["task2pr*"]
+
+[tool.pytest.ini_options]
+# Only collect the project's own tests - eval/fixtures/ holds throwaway
+# target repos whose suites are meant to fail until the agent fixes them.
+testpaths = ["tests"]
